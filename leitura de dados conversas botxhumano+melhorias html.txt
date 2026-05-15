@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador de Mensagens Marketplace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">DataBot Analyser</h1>
+                <p class="text-slate-500 font-medium">Análise de esforço humano e eficiência de automação</p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <label for="csvInput" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Importar Planilha CSV
+                </label>
+                <input type="file" id="csvInput" accept=".csv" class="hidden">
+            </div>
+        </header>
+
+        <!-- Placeholder Inicial -->
+        <div id="welcomeScreen" class="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-20 text-center">
+            <div class="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-700 mb-2">Aguardando dados para análise</h2>
+            <p class="text-slate-500 max-w-md mx-auto">Carregue o arquivo CSV exportado do sistema de mensagens para visualizar os indicadores de performance.</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard" class="hidden animate-in fade-in duration-700">
+            
+            <!-- KPIs -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Mensagens Totais</p>
+                    <h3 id="kpiTotal" class="text-4xl font-black text-slate-800">0</h3>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <p class="text-xs font-bold text-blue-500 uppercase tracking-widest mb-2">Esforço Humano</p>
+                    <h3 id="kpiHuman" class="text-4xl font-black text-blue-600">0</h3>
+                    <p id="kpiHumanPct" class="text-xs text-slate-400 mt-2 font-bold">0% do total</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <p class="text-xs font-bold text-purple-500 uppercase tracking-widest mb-2">Conflitos Bot+Hum</p>
+                    <h3 id="kpiConflicts" class="text-4xl font-black text-purple-600">0</h3>
+                    <p class="text-xs text-slate-400 mt-2 font-bold italic">Respostas redundantes</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-l-4 border-l-amber-400">
+                    <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Falhas do Bot</p>
+                    <h3 id="kpiMissed" class="text-4xl font-black text-amber-600">0</h3>
+                    <p class="text-xs text-slate-400 mt-2 font-bold">Oportunidades perdidas</p>
+                </div>
+            </div>
+
+            <!-- TELA DE GANHOS E PERDAS (NOVA SEÇÃO) -->
+            <div class="mb-12">
+                <h2 class="text-2xl font-black text-slate-800 mb-6 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    Projeção de Valor: Treinamento da IA
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Box 1: Ganho de Automação -->
+                    <div class="group">
+                        <div class="bg-emerald-500 p-6 rounded-t-3xl text-white shadow-lg transition-transform group-hover:-translate-y-1">
+                            <h4 class="text-xs font-bold uppercase tracking-widest opacity-80 mb-2">Ganhos com Ensinamento</h4>
+                            <div class="text-3xl font-black mb-1">+<span id="gainAuto">0</span>% Automação</div>
+                            <p class="text-xs opacity-90">Conversão das <b>23 falhas</b> em respostas instantâneas.</p>
+                        </div>
+                        <div class="bg-slate-800 p-6 rounded-b-3xl text-slate-300 border-t border-slate-700">
+                            <h4 class="text-[10px] font-bold uppercase text-amber-500 mb-3">Sem Ação (Perda Diária)</h4>
+                            <p class="text-xs leading-relaxed">
+                                Sobrecarga humana com respostas de "Cores" e "Tamanhos", gerando <b>delay de resposta</b> e queda na reputação ML.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Box 2: Economia de Tempo -->
+                    <div class="group">
+                        <div class="bg-blue-600 p-6 rounded-t-3xl text-white shadow-lg transition-transform group-hover:-translate-y-1">
+                            <h4 class="text-xs font-bold uppercase tracking-widest opacity-80 mb-2">Produtividade</h4>
+                            <div class="text-3xl font-black mb-1">-<span id="gainTime">0</span>h / mês</div>
+                            <p class="text-xs opacity-90">Estimativa de tempo humano economizado em triagem manual.</p>
+                        </div>
+                        <div class="bg-slate-800 p-6 rounded-b-3xl text-slate-300 border-t border-slate-700">
+                            <h4 class="text-[10px] font-bold uppercase text-amber-500 mb-3">Sem Ação (Perda Diária)</h4>
+                            <p class="text-xs leading-relaxed">
+                                Custo de oportunidade: sua equipe gasta tempo com <b>perguntas óbvias</b> em vez de focar em conversão e pós-venda.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Box 3: Experiência do Cliente -->
+                    <div class="group">
+                        <div class="bg-indigo-600 p-6 rounded-t-3xl text-white shadow-lg transition-transform group-hover:-translate-y-1">
+                            <h4 class="text-xs font-bold uppercase tracking-widest opacity-80 mb-2">Escalabilidade</h4>
+                            <div class="text-3xl font-black mb-1">0 Conflitos</div>
+                            <p class="text-xs opacity-90">Eliminação de respostas duplas e ruídos na comunicação.</p>
+                        </div>
+                        <div class="bg-slate-800 p-6 rounded-b-3xl text-slate-300 border-t border-slate-700">
+                            <h4 class="text-[10px] font-bold uppercase text-amber-500 mb-3">Sem Ação (Perda Diária)</h4>
+                            <p class="text-xs leading-relaxed">
+                                Cliente recebe 2 respostas diferentes, gerando <b>desconfiança</b> e cancelamentos preventivos.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insights Críticos e Top SKUs -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <!-- Recomendacoes -->
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 lg:col-span-2">
+                    <h4 class="text-xl font-bold mb-4 flex items-center gap-2 text-slate-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        Plano de Ação para Performance
+                    </h4>
+                    <ul id="insightsList" class="space-y-4 text-sm font-medium text-slate-600">
+                        <!-- JS Inject -->
+                    </ul>
+                </div>
+
+                <!-- Top SKUs Esforço Humano -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <h4 class="text-lg font-bold mb-4 flex items-center gap-2 text-slate-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                        Produtos Críticos (Esforço Humano)
+                    </h4>
+                    <div id="topSkuList" class="space-y-3">
+                        <!-- JS Inject -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráficos -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h4 class="text-lg font-bold mb-6 flex items-center gap-2">
+                        <span class="w-2 h-6 bg-blue-600 rounded-full"></span>
+                        Temas que mais demandam Atendentes
+                    </h4>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h4 class="text-lg font-bold mb-2 flex items-center gap-2">
+                        <span class="w-2 h-6 bg-indigo-600 rounded-full"></span>
+                        Eficiência de Automação
+                    </h4>
+                    <p class="text-xs text-slate-400 mb-6">Proporção de respostas resolvidas pelo Bot vs Humano</p>
+                    <div class="chart-container">
+                        <canvas id="originChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabelas -->
+            <div class="space-y-8">
+                <section class="bg-white rounded-3xl shadow-sm border border-amber-100 overflow-hidden">
+                    <div class="p-6 bg-amber-50 border-b border-amber-100">
+                        <h3 class="text-lg font-bold text-amber-800 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Onde Focar: Falhas de Automação
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="bg-amber-50/50 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
+                                    <th class="px-6 py-4">Tema</th>
+                                    <th class="px-6 py-4">Pergunta do Cliente</th>
+                                    <th class="px-6 py-4">Esforço Realizado</th>
+                                    <th class="px-6 py-4">Conversa</th>
+                                </tr>
+                            </thead>
+                            <tbody id="missedTable" class="divide-y divide-amber-50 text-xs"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100">
+                        <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                            Conflitos Detectados (Bot + Humano)
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    <th class="px-6 py-4">Conversa / SKU</th>
+                                    <th class="px-6 py-4">Tema</th>
+                                    <th class="px-6 py-4">Resposta Bot</th>
+                                    <th class="px-6 py-4">Resposta Atendente</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conflictTable" class="divide-y divide-slate-100 text-xs"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const csvInput = document.getElementById('csvInput');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const dashboard = document.getElementById('dashboard');
+        
+        let chartInstances = {};
+
+        csvInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            Papa.parse(file, {
+                header: true,
+                delimiter: ";",
+                skipEmptyLines: true,
+                complete: function(results) { processData(results.data); }
+            });
+        });
+
+        function categorize(text) {
+            if (!text) return 'Outros';
+            text = text.toLowerCase();
+            if (/\b(cor|cores|sortid|estamp|azul|rosa|verde|branco|preto|cinza|bege|liso)\b/.test(text)) return 'Cores';
+            if (/\b(tamanho|medida|dimens|cm|metro|solteiro|casal|queen|king|futon)\b/.test(text)) return 'Tamanho';
+            if (/\b(envio|entrega|chega|prazo|rastre|postagem|demora|quando|transportadora)\b/.test(text)) return 'Envio';
+            if (/\b(nota fiscal|nf|valor|paguei|preço|nota|fiscal)\b/.test(text)) return 'Financeiro/Nota';
+            return 'Outros';
+        }
+
+        function processData(rawData) {
+            const data = rawData.map(row => ({
+                ...row,
+                Category: categorize(row.Mensagem),
+                Timestamp: new Date(row['Data da mensagem'])
+            })).sort((a, b) => a.Timestamp - b.Timestamp);
+
+            const conversations = {};
+            data.forEach(msg => {
+                const key = `${msg['Id do Pedido']}_${msg['SKU']}`;
+                if (!conversations[key]) conversations[key] = [];
+                conversations[key].push(msg);
+            });
+
+            let totalResponses = 0;
+            let humanResponses = 0;
+            let botResponses = 0;
+            const conflicts = [];
+            const missed = [];
+            const catStats = { Cores: 0, Tamanho: 0, Envio: 0, 'Financeiro/Nota': 0, Outros: 0 };
+            const skuHumanStats = {};
+
+            Object.values(conversations).forEach(conv => {
+                const botCats = new Set();
+                const humanCats = new Set();
+
+                for (let i = 0; i < conv.length; i++) {
+                    const msg = conv[i];
+                    
+                    if (msg.Origem === 'BOT' || msg.Origem === 'ATTENDANT') {
+                        totalResponses++;
+                        if (msg.Origem === 'BOT') {
+                            botResponses++;
+                            botCats.add(msg.Category);
+                        } else {
+                            humanResponses++;
+                            humanCats.add(msg.Category);
+                            catStats[msg.Category] = (catStats[msg.Category] || 0) + 1;
+
+                            const sku = msg.SKU;
+                            if (!skuHumanStats[sku]) skuHumanStats[sku] = { name: msg.Itens, count: 0, themes: {} };
+                            skuHumanStats[sku].count++;
+                            skuHumanStats[sku].themes[msg.Category] = (skuHumanStats[sku].themes[msg.Category] || 0) + 1;
+                        }
+                    }
+
+                    if (msg.Origem === 'CUSTOMER' && msg.Category !== 'Outros') {
+                        const next = conv[i+1];
+                        if (next && next.Origem === 'ATTENDANT') {
+                            missed.push({
+                                theme: msg.Category,
+                                customer: msg.Mensagem,
+                                human: next.Mensagem,
+                                id: msg['Id do Pedido']
+                            });
+                        }
+                    }
+                }
+
+                const overlap = [...botCats].filter(c => humanCats.has(c) && c !== 'Outros');
+                overlap.forEach(cat => {
+                    const bMsg = conv.find(m => m.Origem === 'BOT' && m.Category === cat);
+                    const hMsg = conv.find(m => m.Origem === 'ATTENDANT' && m.Category === cat);
+                    conflicts.push({ id: conv[0]['Id do Pedido'], sku: conv[0]['SKU'], theme: cat, bot: bMsg.Mensagem, human: hMsg.Mensagem });
+                });
+            });
+
+            updateUI({
+                total: totalResponses,
+                human: humanResponses,
+                bot: botResponses,
+                conflicts: conflicts,
+                missed: missed,
+                catStats: catStats,
+                skuHumanStats: skuHumanStats
+            });
+        }
+
+        function updateUI(stats) {
+            welcomeScreen.classList.add('hidden');
+            dashboard.classList.remove('hidden');
+
+            document.getElementById('kpiTotal').innerText = stats.total;
+            document.getElementById('kpiHuman').innerText = stats.human;
+            document.getElementById('kpiHumanPct').innerText = `${((stats.human / stats.total) * 100).toFixed(1)}% do total`;
+            document.getElementById('kpiConflicts').innerText = stats.conflicts.length;
+            document.getElementById('kpiMissed').innerText = stats.missed.length;
+
+            // Calculo de ganhos
+            const gainAutoPct = ((stats.missed.length / stats.total) * 100).toFixed(1);
+            const timeSaved = (stats.human * 0.08).toFixed(1); // Média de 5 min por atendimento humano
+            
+            document.getElementById('gainAuto').innerText = gainAutoPct;
+            document.getElementById('gainTime').innerText = timeSaved;
+
+            document.getElementById('missedTable').innerHTML = stats.missed.slice(0, 8).map(m => `
+                <tr>
+                    <td class="px-6 py-4 font-bold text-amber-700">${m.theme}</td>
+                    <td class="px-6 py-4 text-slate-600">"${m.customer.substring(0, 60)}..."</td>
+                    <td class="px-6 py-4 font-medium text-emerald-700 italic">"${m.human.substring(0, 60)}..."</td>
+                    <td class="px-6 py-4 font-mono text-slate-400">#${m.id}</td>
+                </tr>`).join('');
+
+            document.getElementById('conflictTable').innerHTML = stats.conflicts.slice(0, 8).map(c => `
+                <tr>
+                    <td class="px-6 py-4"><div class="font-bold text-blue-600">#${c.id}</div><div class="text-[10px] text-slate-400">${c.sku}</div></td>
+                    <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold">${c.theme}</span></td>
+                    <td class="px-6 py-4 text-slate-500 italic">"${c.bot.substring(0, 50)}..."</td>
+                    <td class="px-6 py-4 font-bold">"${c.human.substring(0, 50)}..."</td>
+                </tr>`).join('');
+
+            renderCharts(stats);
+            renderInsights(stats);
+            renderTopSkus(stats.skuHumanStats);
+        }
+
+        function renderTopSkus(skuStats) {
+            const list = document.getElementById('topSkuList');
+            const sorted = Object.entries(skuStats).sort((a, b) => b[1].count - a[1].count).slice(0, 5);
+            list.innerHTML = sorted.map(([sku, data]) => {
+                const themeEntries = Object.entries(data.themes);
+                const topTheme = themeEntries.length > 0 ? themeEntries.sort((a,b) => b[1]-a[1])[0][0] : 'N/A';
+                return `
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-[10px] font-mono text-blue-500 font-bold">${sku}</span>
+                        <span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">${data.count} atend.</span>
+                    </div>
+                    <div class="text-[11px] font-bold text-slate-800 line-clamp-1 mb-1">${data.name || 'Produto sem nome'}</div>
+                    <div class="text-[10px] text-slate-500 flex items-center gap-1">
+                        Principal tema: <b>${topTheme}</b>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderCharts(stats) {
+            if (chartInstances.cat) chartInstances.cat.destroy();
+            if (chartInstances.origin) chartInstances.origin.destroy();
+            const ctxCat = document.getElementById('categoryChart').getContext('2d');
+            chartInstances.cat = new Chart(ctxCat, {
+                type: 'bar',
+                data: { labels: Object.keys(stats.catStats), datasets: [{ data: Object.values(stats.catStats), backgroundColor: '#3b82f6', borderRadius: 8 }] },
+                options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+            const ctxOrigin = document.getElementById('originChart').getContext('2d');
+            chartInstances.origin = new Chart(ctxOrigin, {
+                type: 'doughnut',
+                data: { labels: ['Bot', 'Humano'], datasets: [{ data: [stats.bot, stats.human], backgroundColor: ['#6366f1', '#10b981'], borderWidth: 0 }] },
+                options: { maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        function renderInsights(stats) {
+            const list = document.getElementById('insightsList');
+            const sortedMissed = stats.missed.reduce((acc, curr) => { acc[curr.theme] = (acc[curr.theme] || 0) + 1; return acc; }, {});
+            const topMissed = Object.entries(sortedMissed).sort((a,b) => b[1] - a[1])[0];
+            const sortedSkus = Object.entries(stats.skuHumanStats).sort((a, b) => b[1].count - a[1].count);
+            const topSku = sortedSkus[0];
+
+            list.innerHTML = `
+                <li class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border-l-4 border-l-blue-600">
+                    <span class="text-blue-600 mt-1">🚀</span>
+                    <span><b>Foco no Produto:</b> O <span class="font-bold">${topSku ? topSku[1].name.substring(0,35) : 'N/A'}...</span> gera mais trabalho manual (${topSku ? topSku[1].count : 0} casos). Melhore a FAQ deste anúncio.</span>
+                </li>
+                <li class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border-l-4 border-l-amber-500">
+                    <span class="text-amber-500 mt-1">⚠️</span>
+                    <span><b>Gargalo:</b> O tema <b>${topMissed ? topMissed[0] : 'N/A'}</b> tem o maior volume de falhas de automação. Treine a IA para reconhecer pedidos de "não enviar cor X".</span>
+                </li>
+                <li class="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border-l-4 border-l-purple-500">
+                    <span class="text-purple-500 mt-1">🔄</span>
+                    <span><b>Redundância:</b> Atendentes repetem o que o Bot já disse em <b>${stats.conflicts.length} interações</b>. Isso dobra o tempo de atendimento por conversa.</span>
+                </li>
+            `;
+        }
+    </script>
+</body>
+</html>
